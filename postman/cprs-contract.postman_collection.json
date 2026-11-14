@@ -1,0 +1,814 @@
+{
+  "info": {
+    "name": "CPRS API - Contract Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Verifies status codes, response structures and RFC 7807 error bodies against openapi/openapi.json"
+  },
+  "item": [
+    {
+      "name": "POST /reports - valid (201)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('Content-Type is application/json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "pm.test('Body matches the Report schema', () => pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"id\",\"category\",\"title\",\"description\",\"building\",\"location\",\"status\",\"createdAt\",\"updatedAt\"],\"properties\":{\"id\":{\"type\":\"string\"},\"category\":{\"enum\":[\"electrical\",\"plumbing\",\"security\",\"furniture\",\"lighting\",\"ict\",\"sanitation\",\"other\"]},\"title\":{\"type\":\"string\",\"minLength\":5,\"maxLength\":100},\"description\":{\"type\":\"string\",\"minLength\":10,\"maxLength\":1000},\"building\":{\"type\":\"string\",\"minLength\":2,\"maxLength\":60},\"location\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":60},\"status\":{\"enum\":[\"submitted\",\"in_review\",\"assigned\",\"in_progress\",\"resolved\"]},\"statusNote\":{\"type\":\"string\"},\"createdAt\":{\"type\":\"string\"},\"updatedAt\":{\"type\":\"string\"}}}));",
+              "pm.test('New report starts as \"submitted\"', () => pm.expect(pm.response.json().status).to.eql('submitted'));",
+              "pm.test('Location header points to the new report', () => pm.expect(pm.response.headers.get('Location')).to.eql('/api/v1/reports/' + pm.response.json().id));",
+              "pm.collectionVariables.set('reportId', pm.response.json().id);",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"electrical\",\n  \"title\": \"Broken socket near the window\",\n  \"description\": \"The double socket next to the window has no power.\",\n  \"building\": \"Block A\",\n  \"location\": \"Room 12\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /reports - missing required fields (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 422', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(422);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});",
+              "pm.test('errors[] lists each missing field', () => {",
+              "  const fields = pm.response.json().errors.map(e => e.field);",
+              "  pm.expect(fields).to.include.members(['/title', '/description', '/building', '/location']);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"plumbing\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /reports - wrong type + bad enum + short title (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 422', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(422);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"cooking\",\n  \"title\": 123,\n  \"description\": \"The double socket next to the window has no power.\",\n  \"building\": \"Block A\",\n  \"location\": \"Room 12\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /reports - regex pattern violation (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 422', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(422);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});",
+              "pm.test('failed keyword is \"pattern\"', () => pm.expect(pm.response.json().errors.map(e => e.keyword)).to.include('pattern'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"electrical\",\n  \"title\": \"Broken socket near the window\",\n  \"description\": \"The double socket next to the window has no power.\",\n  \"building\": \"<script>alert(1)</script>\",\n  \"location\": \"Room 12\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /reports - unknown property (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 422', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(422);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});",
+              "pm.test('failed keyword is \"additionalProperties\"', () => pm.expect(pm.response.json().errors.map(e => e.keyword)).to.include('additionalProperties'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"electrical\",\n  \"title\": \"Broken socket near the window\",\n  \"description\": \"The double socket next to the window has no power.\",\n  \"building\": \"Block A\",\n  \"location\": \"Room 12\",\n  \"isAdmin\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /reports - malformed JSON (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 400', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(400);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"category\": \"electrical\", "
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports/{id} - existing (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Body matches the Report schema', () => pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"id\",\"category\",\"title\",\"description\",\"building\",\"location\",\"status\",\"createdAt\",\"updatedAt\"],\"properties\":{\"id\":{\"type\":\"string\"},\"category\":{\"enum\":[\"electrical\",\"plumbing\",\"security\",\"furniture\",\"lighting\",\"ict\",\"sanitation\",\"other\"]},\"title\":{\"type\":\"string\",\"minLength\":5,\"maxLength\":100},\"description\":{\"type\":\"string\",\"minLength\":10,\"maxLength\":1000},\"building\":{\"type\":\"string\",\"minLength\":2,\"maxLength\":60},\"location\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":60},\"status\":{\"enum\":[\"submitted\",\"in_review\",\"assigned\",\"in_progress\",\"resolved\"]},\"statusNote\":{\"type\":\"string\"},\"createdAt\":{\"type\":\"string\"},\"updatedAt\":{\"type\":\"string\"}}}));",
+              "pm.test('id matches the created report', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('reportId')));",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/{{reportId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "{{reportId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports/{id} - unknown (404)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 404', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(404);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/3f2b8c1e-7a4d-4e57-9c63-0d1f2a3b4c5d",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "3f2b8c1e-7a4d-4e57-9c63-0d1f2a3b4c5d"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports/{id} - malformed id (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 400', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(400);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/not-a-uuid",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "not-a-uuid"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports - list with filter (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Pagination object is correct', () => {",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.pagination.page).to.eql(1);",
+              "  pm.expect(b.pagination.limit).to.eql(5);",
+              "  pm.expect(b.data.length).to.be.at.most(5);",
+              "});",
+              "pm.test('Every item matches the Report schema and the filter', () => {",
+              "  pm.response.json().data.forEach(r => { pm.expect(tv4.validate(r, {\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"id\",\"category\",\"title\",\"description\",\"building\",\"location\",\"status\",\"createdAt\",\"updatedAt\"],\"properties\":{\"id\":{\"type\":\"string\"},\"category\":{\"enum\":[\"electrical\",\"plumbing\",\"security\",\"furniture\",\"lighting\",\"ict\",\"sanitation\",\"other\"]},\"title\":{\"type\":\"string\",\"minLength\":5,\"maxLength\":100},\"description\":{\"type\":\"string\",\"minLength\":10,\"maxLength\":1000},\"building\":{\"type\":\"string\",\"minLength\":2,\"maxLength\":60},\"location\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":60},\"status\":{\"enum\":[\"submitted\",\"in_review\",\"assigned\",\"in_progress\",\"resolved\"]},\"statusNote\":{\"type\":\"string\"},\"createdAt\":{\"type\":\"string\"},\"updatedAt\":{\"type\":\"string\"}}})).to.be.true; pm.expect(r.category).to.eql('electrical'); });",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports?page=1&limit=5&category=electrical",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            },
+            {
+              "key": "category",
+              "value": "electrical"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports - invalid limit (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 400', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(400);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports?limit=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /reports - unsupported query parameter (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 400', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(400);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports?sort=asc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ],
+          "query": [
+            {
+              "key": "sort",
+              "value": "asc"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /reports/{id}/status - no session (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 401', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(401);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"in_review\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/{{reportId}}/status",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "{{reportId}}",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /reports/{id}/status - valid session (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Body matches the Report schema', () => pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"id\",\"category\",\"title\",\"description\",\"building\",\"location\",\"status\",\"createdAt\",\"updatedAt\"],\"properties\":{\"id\":{\"type\":\"string\"},\"category\":{\"enum\":[\"electrical\",\"plumbing\",\"security\",\"furniture\",\"lighting\",\"ict\",\"sanitation\",\"other\"]},\"title\":{\"type\":\"string\",\"minLength\":5,\"maxLength\":100},\"description\":{\"type\":\"string\",\"minLength\":10,\"maxLength\":1000},\"building\":{\"type\":\"string\",\"minLength\":2,\"maxLength\":60},\"location\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":60},\"status\":{\"enum\":[\"submitted\",\"in_review\",\"assigned\",\"in_progress\",\"resolved\"]},\"statusNote\":{\"type\":\"string\"},\"createdAt\":{\"type\":\"string\"},\"updatedAt\":{\"type\":\"string\"}}}));",
+              "pm.test('Status changed to \"assigned\"', () => pm.expect(pm.response.json().status).to.eql('assigned'));",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "cprs_sid={{staffSession}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"assigned\",\n  \"note\": \"Electrician booked\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/{{reportId}}/status",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "{{reportId}}",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /reports/{id}/status - invalid status (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+              "pm.test('Content-Type is application/problem+json (RFC 7807)', () => {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Body matches the Problem schema and status field equals 422', () => {",
+              "  const body = pm.response.json();",
+              "  pm.response.to.have.jsonSchema({\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"type\",\"title\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"status\":{\"type\":\"integer\",\"minimum\":400,\"maximum\":599},\"detail\":{\"type\":\"string\"},\"instance\":{\"type\":\"string\"},\"errors\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"in\",\"field\",\"message\"],\"properties\":{\"in\":{\"enum\":[\"body\",\"query\",\"path\"]},\"field\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"keyword\":{\"type\":\"string\"}}}}}});",
+              "  pm.expect(body.status).to.eql(422);",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "cprs_sid={{staffSession}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"done\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/{{reportId}}/status",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports",
+            "{{reportId}}",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /priorities - ranked by report count (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Issues are sorted by reportCount (highest first) and ranked 1..n', () => {",
+              "  const list = pm.response.json().data;",
+              "  list.forEach((it, i) => {",
+              "    pm.expect(it.rank).to.eql(i + 1);",
+              "    if (i > 0) pm.expect(list[i - 1].reportCount).to.be.at.least(it.reportCount);",
+              "  });",
+              "});",
+              "pm.test('priorityLevel follows the documented thresholds', () => {",
+              "  pm.response.json().data.forEach(it => {",
+              "    const expected = it.reportCount >= 10 ? 'critical' : it.reportCount >= 5 ? 'high' : it.reportCount >= 3 ? 'medium' : 'low';",
+              "    pm.expect(it.priorityLevel).to.eql(expected);",
+              "  });",
+              "});",
+              "pm.test('Rate-limit headers are present (documented in OpenAPI)', () => {",
+              "  pm.response.to.have.header('RateLimit-Limit');",
+              "  pm.response.to.have.header('RateLimit-Remaining');",
+              "  pm.response.to.have.header('RateLimit-Reset');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/priorities?limit=50",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "priorities"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "reportId",
+      "value": ""
+    }
+  ]
+}

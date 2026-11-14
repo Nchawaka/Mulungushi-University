@@ -1,0 +1,28 @@
+{
+  "name": "cprs-api",
+  "version": "1.0.0",
+  "description": "CPRS contract-first REST API (ICT461 Lab 4)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "SEED_DEMO_DATA=true node src/server.js",
+    "spec:build": "node scripts/build-spec.js && node scripts/spec-yaml.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "test:newman": "bash scripts/run-newman.sh",
+    "test:curl": "bash scripts/curl-contract.sh"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "cors": "^2.8.6",
+    "express": "^4.22.3",
+    "express-rate-limit": "^7.5.1",
+    "js-yaml": "^5.5.0",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@seriousme/openapi-schema-validator": "^2.11.0",
+    "newman": "^6.2.3",
+    "playwright-core": "^1.65.0"
+  }
+}

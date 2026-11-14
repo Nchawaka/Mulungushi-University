@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "CPRS API - Rate Limit Test",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run with --iteration-count 8 against a server started with RATE_LIMIT_MAX=5. Requests 1-5 return 200, requests 6-8 return 429."
+  },
+  "item": [
+    {
+      "name": "GET /reports (repeated)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const max = Number(pm.environment.get('rateLimitMax') || 5);",
+              "const n = pm.info.iteration + 1;   // request number within the window",
+              "if (n <= max) {",
+              "  pm.test('Request ' + n + ' of ' + max + ' allowed: 200 OK', () => pm.response.to.have.status(200));",
+              "  pm.test('RateLimit-Remaining counts down to ' + (max - n), () => pm.expect(pm.response.headers.get('RateLimit-Remaining')).to.eql(String(max - n)));",
+              "} else {",
+              "  pm.test('Request ' + n + ' exceeds the limit: 429 Too Many Requests', () => pm.response.to.have.status(429));",
+              "  pm.test('Retry-After header present', () => pm.expect(Number(pm.response.headers.get('Retry-After'))).to.be.above(0));",
+              "  pm.test('Body is RFC 7807 application/problem+json', () => {",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "    pm.expect(pm.response.json().status).to.eql(429);",
+              "  });",
+              "}",
+              "pm.test('RateLimit-Limit equals ' + max, () => pm.expect(pm.response.headers.get('RateLimit-Limit')).to.eql(String(max)));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "reports"
+          ]
+        }
+      }
+    }
+  ]
+}
